@@ -2,6 +2,9 @@ export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
+    // 🔎 현재 적용된 모델 확인용 (디버깅)
+    console.log("CURRENT MODEL:", env.GEMINI_MODEL);
+
     const body = await request.json();
     const keyword = body.keyword;
 
@@ -47,17 +50,18 @@ export async function onRequestPost(context) {
 
     const geminiData = await geminiRes.json();
 
-    // 🔎 디버깅용 (에러 원인 확인용)
-    console.log("GEMINI RESPONSE:", JSON.stringify(geminiData));
-
+    // 🔎 에러 원인 확인
     if (!geminiRes.ok) {
       return new Response(
-        JSON.stringify({ error: "Gemini API error", detail: geminiData }),
+        JSON.stringify({
+          error: "Gemini API error",
+          modelUsed: env.GEMINI_MODEL,
+          detail: geminiData,
+        }),
         { status: 500, headers: { "content-type": "application/json" } }
       );
     }
 
-    // ✅ 안전 파싱
     let content = "";
 
     if (geminiData.candidates && geminiData.candidates.length > 0) {
@@ -75,7 +79,7 @@ export async function onRequestPost(context) {
       );
     }
 
-    // ✅ DB 저장
+    // DB 저장
     const result = await env.DB.prepare(
       "INSERT INTO posts (title, content, keyword, status) VALUES (?, ?, ?, 'draft')"
     )
@@ -85,6 +89,7 @@ export async function onRequestPost(context) {
     return new Response(
       JSON.stringify({
         status: "ok",
+        modelUsed: env.GEMINI_MODEL,
         postId: result.meta.last_row_id,
         preview: content.slice(0, 300),
       }),
@@ -94,7 +99,10 @@ export async function onRequestPost(context) {
     );
   } catch (e) {
     return new Response(
-      JSON.stringify({ error: "Server error", detail: String(e) }),
+      JSON.stringify({
+        error: "Server error",
+        detail: String(e),
+      }),
       { status: 500, headers: { "content-type": "application/json" } }
     );
   }
