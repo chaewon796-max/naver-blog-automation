@@ -17,7 +17,7 @@ export async function onRequestPost(context) {
 
     // ✅ Gemini 호출
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
