@@ -12,7 +12,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Gemini 호출
+    // ✅ Gemini 호출
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`,
       {
@@ -33,7 +33,7 @@ export async function onRequestPost(context) {
 조건:
 - 제목 포함
 - 서론/본론/결론 구조
-- 최소 1500자
+- 최소 1500자 이상
 - 사람처럼 자연스럽게 작성
 - 과장 금지
 `,
@@ -46,17 +46,36 @@ export async function onRequestPost(context) {
     );
 
     const geminiData = await geminiRes.json();
-    const content =
-      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    if (!content) {
-      return new Response(JSON.stringify({ error: "AI generation failed" }), {
-        status: 500,
-        headers: { "content-type": "application/json" },
-      });
+    // 🔎 디버깅용 (에러 원인 확인용)
+    console.log("GEMINI RESPONSE:", JSON.stringify(geminiData));
+
+    if (!geminiRes.ok) {
+      return new Response(
+        JSON.stringify({ error: "Gemini API error", detail: geminiData }),
+        { status: 500, headers: { "content-type": "application/json" } }
+      );
     }
 
-    // DB 저장
+    // ✅ 안전 파싱
+    let content = "";
+
+    if (geminiData.candidates && geminiData.candidates.length > 0) {
+      const parts = geminiData.candidates[0].content.parts;
+      content = parts.map((p) => p.text || "").join("\n");
+    }
+
+    if (!content) {
+      return new Response(
+        JSON.stringify({
+          error: "AI generation failed",
+          raw: geminiData,
+        }),
+        { status: 500, headers: { "content-type": "application/json" } }
+      );
+    }
+
+    // ✅ DB 저장
     const result = await env.DB.prepare(
       "INSERT INTO posts (title, content, keyword, status) VALUES (?, ?, ?, 'draft')"
     )
@@ -74,9 +93,9 @@ export async function onRequestPost(context) {
       }
     );
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: "Server error", detail: String(e) }),
+      { status: 500, headers: { "content-type": "application/json" } }
+    );
   }
 }
