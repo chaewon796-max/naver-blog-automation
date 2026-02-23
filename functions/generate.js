@@ -14,6 +14,12 @@ export async function onRequestPost(context) {
       });
     }
 
+    // ⏱️ 타임아웃 컨트롤러 생성 (30초)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, 30000);
+
     // 🔥 Gemini 호출 (KEY 반드시 포함)
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -22,6 +28,7 @@ export async function onRequestPost(context) {
         headers: {
           "content-type": "application/json",
         },
+        signal: controller.signal,
         body: JSON.stringify({
           contents: [
             {
@@ -46,6 +53,9 @@ export async function onRequestPost(context) {
         }),
       }
     );
+
+    // ⏱️ 정상 응답 시 타임아웃 해제
+    clearTimeout(timeout);
 
     const geminiData = await geminiRes.json();
 
@@ -102,7 +112,20 @@ export async function onRequestPost(context) {
       }
     );
   } catch (e) {
+
+    // ⛔ 타임아웃으로 중단된 경우
+    if (e.name === "AbortError") {
+      return new Response(
+        JSON.stringify({
+          error: "Gemini timeout",
+          message: "30초 응답 없음으로 요청 중단",
+        }),
+        { status: 504, headers: { "content-type": "application/json" } }
+      );
+    }
+
     console.error("SERVER ERROR:", e);
+
     return new Response(
       JSON.stringify({
         error: "Server error",
